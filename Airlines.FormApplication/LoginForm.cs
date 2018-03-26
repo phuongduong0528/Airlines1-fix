@@ -15,6 +15,9 @@ namespace Airlines.FormApplication
 {
     public partial class LoginForm : Form
     {
+        private int _countfail = 0;
+        private int _secRemaining = 10;
+
         public LoginForm()
         {
             InitializeComponent();
@@ -29,6 +32,19 @@ namespace Airlines.FormApplication
                 return true;
         }
 
+        void TaskRunning()
+        {
+            statusLbl.Visible = true;
+            loginBtn.Enabled = false;
+        }
+
+        void TaskEnd()
+        {
+            statusLbl.Text = "Please wait...";
+            statusLbl.Visible = false;
+            loginBtn.Enabled = true;
+        }
+
         private async void loginBtn_Click(object sender, EventArgs e)
         {
             if(String.IsNullOrEmpty(usernameTxb.Text) ||
@@ -38,50 +54,78 @@ namespace Airlines.FormApplication
             }
             else
             {
+                TaskRunning();
                 int re = await Program.Instance.UserController.Authenticate(
                     usernameTxb.Text,
                     Utilities.ToHashString(passwordTxb.Text));
                 switch (re)
                 {
                     case -1:
-                        MessageBox.Show("Wrong username or password");
+                        await LoginFail();
                         break;
                     case 0:
                         MessageBox.Show("Account disable");
                         break;
                     case 1:
-                        int _id = await Program.Instance.UserController.UserId(usernameTxb.Text);
-                        string _date = DateTime.UtcNow.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
-                        string _time = DateTime.UtcNow.TimeOfDay.ToString(@"hh\:mm\:ss");
-                        string _confidence = await Program.Instance.UserActivityController.LoginLogs(_id, _date, _time);
-                        NoLogOutForm noLogOutForm = new NoLogOutForm(_id, _confidence);
-                        noLogOutForm.ShowDialog();
-                        bool x = await CheckAdmin(_id);
-                        if (x)
-                            AdminFormLoad(_id, _confidence);
-                        else
-                            UserFormLoad(_id, _confidence);
+                        await EnterMainFormUserNoLogOut();
                         break;
                     case 2:
-                        int id = await Program.Instance.UserController.UserId(usernameTxb.Text);
-                        string date = DateTime.UtcNow.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
-                        string time = DateTime.UtcNow.TimeOfDay.ToString(@"hh\:mm\:ss");
-                        string confidence = await Program.Instance.UserActivityController.LoginLogs(id,date,time);
-                        bool check = await CheckAdmin(id);
-                        if (check)
-                            AdminFormLoad(id, confidence);
-                        else
-                            UserFormLoad(id, confidence);
+                        await EnterMainForm();
                         break;
                 }
+                TaskEnd();
             }
+        }
+
+        private async Task LoginFail()
+        {
+            _countfail++;
+            if (_countfail == 3)
+            {
+                loginfailTimer.Start();
+                TaskRunning();
+                await Task.Delay(11000);
+                TaskEnd();
+            }
+            else
+            {
+                MessageBox.Show("Wrong username or password");
+            }
+        }
+
+        private async Task EnterMainForm()
+        {
+            int idcase2 = await Program.Instance.UserController.UserId(usernameTxb.Text);
+            string datecase2 = DateTime.UtcNow.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            string timecase2 = DateTime.UtcNow.TimeOfDay.ToString(@"hh\:mm\:ss");
+            string confidencecase2 = await Program.Instance.UserActivityController.LoginLogs(idcase2, datecase2, timecase2);
+            bool check = await CheckAdmin(idcase2);
+            if (check)
+                AdminFormLoad(idcase2, confidencecase2);
+            else
+                UserFormLoad(idcase2, confidencecase2);
+        }
+
+        private async Task EnterMainFormUserNoLogOut()
+        {
+            int id = await Program.Instance.UserController.UserId(usernameTxb.Text);
+            string date = DateTime.UtcNow.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            string time = DateTime.UtcNow.TimeOfDay.ToString(@"hh\:mm\:ss");
+            string confidence = await Program.Instance.UserActivityController.LoginLogs(id, date, time);
+            NoLogOutForm noLogOutForm = new NoLogOutForm(id, confidence);
+            noLogOutForm.ShowDialog();
+            bool x = await CheckAdmin(id);
+            if (x)
+                AdminFormLoad(id, confidence);
+            else
+                UserFormLoad(id, confidence);
         }
 
         private void AdminFormLoad(int uid, string confidence)
         {
-            MainFormAdmin _mainForm = new MainFormAdmin(uid, confidence);
-            _mainForm.FormClosed += MainForm_FormClosed;
-            _mainForm.Show();
+            MainFormAdmin mainForm = new MainFormAdmin(uid, confidence);
+            mainForm.FormClosed += MainForm_FormClosed;
+            mainForm.Show();
             this.Visible = false;
         }
 
@@ -111,6 +155,19 @@ namespace Airlines.FormApplication
         private void LoginForm_Load(object sender, EventArgs e)
         {
 
+        }
+
+        private void loginfailTimer_Tick(object sender, EventArgs e)
+        {
+            _secRemaining--;
+            statusLbl.Text = $"You've logged in wrong 3 times " +
+                $"Please wait {_secRemaining} seconds";
+            if (_secRemaining == 0)
+            {
+                loginfailTimer.Stop();
+                _secRemaining = 10;
+                _countfail = 0;
+            }
         }
     }
 }

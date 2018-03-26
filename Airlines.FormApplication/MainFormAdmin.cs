@@ -144,6 +144,8 @@ namespace Airlines.FormApplication
             }
             EditUserForm form = new EditUserForm(_id, confidence);
             form.ShowDialog();
+            RefreshData();
+            LoadGridView();
         }
     }
 }
